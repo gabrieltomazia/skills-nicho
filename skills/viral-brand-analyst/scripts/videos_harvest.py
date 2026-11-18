@@ -51,10 +51,16 @@ def views_num(s):
     return int(n * (1_000_000 if u == "M" else 1_000 if u == "K" else 1))
 
 def age_days(s):
-    m = re.search(r"(\d+)\s+(minute|hour|day|week|month|year)", s)
+    # YouTube shows either "3 days ago" or the short form "3d ago" / "19h ago" / "2mo ago".
+    m = re.search(r"(\d+)\s*(minutes?|min|m(?!o)|hours?|h|days?|d|weeks?|w|months?|mo|years?|y)\b", s)
     if not m: return None
     n, u = int(m.group(1)), m.group(2)
-    return {"minute": 0, "hour": 0, "day": n, "week": n*7, "month": n*30, "year": n*365}[u] if u in ("day","week","month","year") else 0
+    if u.startswith("mo"): return n*30
+    if u.startswith("min") or u == "m" or u.startswith("h"): return 0
+    if u.startswith("d"): return n
+    if u.startswith("w"): return n*7
+    if u.startswith("y"): return n*365
+    return None
 
 def harvest(handle):
     html = fetch(f"https://www.youtube.com/{handle}/videos")
@@ -63,7 +69,8 @@ def harvest(handle):
     if data: walk(data, vids)
     rows = []
     for v in vids:
-        vc = views_num(v["views_txt"]) if "view" in v["views_txt"] else None
+        # "117K views" or just "117K" depending on the layout YouTube serves
+        vc = views_num(v["views_txt"]) if re.search(r"\d", v["views_txt"]) and "ago" not in v["views_txt"] else None
         rows.append({"id": v["videoId"], "title": v["title"], "views": vc, "age": v["age_txt"],
                      "age_days": age_days(v["age_txt"]), "length": v["length"], "thumb": v["thumb"]})
     rows = [r for r in rows if r["views"] is not None]
